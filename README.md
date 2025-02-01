@@ -5,6 +5,7 @@
 ## What is this?
 
 ***Euskaldun*** (plural: *euskaldunes*) is a term referring to a speaker of the Basque language -- one of the world's most unique languages, whose origins are still unknown.
+
 This map project visualizes changes in the use of the Basque language across municipalities in the Basque Country from 1981 to 2021.
 
 ## Data
