@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<title>Euskaldunes</title>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.2.0/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.2.0/dist/leaflet.js"></script>
+
+    <script src="https://code.jquery.com/jquery-1.7.1.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.1/jquery.min.js"></script>
+
+    <link rel='stylesheet prefetch' href='http://mrmufflon.github.io/Leaflet.Coordinates/dist/Leaflet.Coordinates-0.1.3.css'>
+    <script src='http://mrmufflon.github.io/Leaflet.Coordinates/dist/Leaflet.Coordinates-0.1.3.min.js'></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-search@4.0.0/dist/leaflet-search.src.css" />
+    <script src="https://unpkg.com/leaflet-search@4.0.0/dist/leaflet-search.src.js"></script>
+    <script src="plugins/leaflet-timeline-slider.min.js"></script>
+    
+    <script src="geojson/municipios.js"></script>
+    <script src="geojson/territorios.js"></script>
+
+    <link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.1.0/css/font-awesome.min.css" rel="stylesheet">
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div id="map"></div>     
+
+    <div id="infoPopup" class="infoPopup">
+        <div class="infoPopup-content">
+            <p><b><i>Euskaldun</i></b> (plural: <i>euskaldunes</i>) is a term referring to a speaker of the Basque language – 
+                one of the world's most unique languages, whose origins are still unknown.</p>
+            <p>This map project visualizes changes in the use of the Basque language across municipalities in the Basque Country from 1986 to 2021.</p>
+            <hr>
+            <p><b>Data:</b></p>
+            <ul>
+                <li><a href="https://eustat.eus/">Eustat</a> – language usage</li>
+                <li><a href="https://www.geo.euskadi.eus/">geoEuskadi</a> – administrative boundaries</li>
+            </ul>
+            <hr>
+            <p><b>Author:</b> Adam Olejniczak</p>
+            <button id="closePopup">Understood!</button>
+        </div>
+    </div>
+
+    <script>
+        var southWest = L.latLng(42.45, -3.5),
+            northEast = L.latLng(43.5, -1.7),
+            bounds = L.latLngBounds(southWest, northEast);
+                
+        var map = L.map('map', {
+            maxZoom: 13,
+            minZoom: 9,
+            maxBounds: bounds
+        }).setView([43.0429987, -2.6167045], 9);
+
+        var CartoDB_VoyagerNoLabels = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 20
+        }).addTo(map);
+
+        var scale = L.control.scale({position:"bottomleft", imperial: false})
+        scale.addTo(map);
+
+        function getfillColor(value) {
+            return (value >= 0 && value <= 20) ? "#edf8fb" :
+                (value > 20 && value <= 30) ? "#ccece6" : 
+                (value > 30 && value <= 45) ? "#99d8c9" : 
+                (value > 45 && value <= 65) ? "#66c2a4" : 
+                (value > 65 && value <= 80) ? "#2ca25f" : 
+                (value > 80) ? "#006d2c" : 
+                "#636363";
+        }
+
+        var activeLayer = "eh_municipios_1986";
+
+        function highlightFeature(e) {
+            var layer = e.target;
+            layer.setStyle({
+                weight: 3,
+                color: '#666666'
+            });
+            info.update(layer.feature.properties);
+            layer.bringToFront();
+        }
+
+        function resetHighlight(e) {
+            const year = activeLayer.split('_')[2];
+            const currentLayer = layers[year];
+
+            if (currentLayer) {
+                currentLayer.resetStyle(e.target);
+            } 
+            info.update();
+            eh_territorios.bringToFront();
+        }
+
+        function zoomToFeature(e) {
+            map.fitBounds(e.target.getBounds());
+        }
+
+        function year_layer(year) {
+            return L.geoJSON(municipios, {
+                style: function(feature) {
+                    return {
+                        fillColor: getfillColor(feature.properties[`pct_${year}`]),
+                        fillOpacity: 1,
+                        color: "#969696",
+                        weight: 0.75
+                    };
+                },
+                onEachFeature: function (feature, layer) {
+                    layer.on({
+                        mouseover: highlightFeature,
+                        mouseout: resetHighlight,
+                        click: zoomToFeature
+                    });
+
+                    if (feature.properties[`pct_${year}`] === -999){
+                        if (feature.properties.NOMBRE_TOP === 'Limitadua / El Limitado'){
+                            layer.bindPopup(
+                                '<b>'+feature.properties.NOMBRE_TOP+'</b><br>'+
+                                'no data; territorial dispute between Aramaio (Araba/Álava) and Otxandio (Bizkaia)'+
+                                '<sup><a href = "https://www.elcorreo.com/alava/araba/201612/20/limitado-frontera-disputa-entre-20161219201924.html?">1</a></sup>'
+                            )
+                        } else if (feature.properties.NOMBRE_TOP.includes('Parzonería')){
+                            layer.bindPopup(
+                                '<b>'+feature.properties.NOMBRE_TOP+
+                                '</b><br>no data; <i>parzonería</i> is an uninahbited common land managed by surrounding municipalities'
+                            )
+                        } else if (feature.properties.NOMBRE_TOP === 'Usansolo'){
+                            layer.bindPopup(
+                                '<b>'+feature.properties.NOMBRE_TOP+
+                                '</b><br>no data; Usansolo municipality seceded from Galdakao on December 28th 2023'+
+                                '<sup><a href = "https://www.eitb.eus/es/noticias/politica/detalle/9386468/usansolo-se-convierte-hoy-oficialmente-en-localidad-numero-113-de-bizkaia/">1</a></sup>'
+                            )
+                        } else if (feature.properties.NOMBRE_TOP === 'Ziortza-Bolibar'){
+                            layer.bindPopup(
+                                '<b>'+feature.properties.NOMBRE_TOP+
+                                '</b><br>no data; Ziortza-Bolibar municipality became independent from Markina-Xemein on January 1st 2005'+
+                                '<sup><a href = "https://www.diariovasco.com/20070820/gente/ziortza-bolivar-alcaldes-libertadores-20070820.html">1</a></sup>'
+                            )
+                        } else {
+                            layer.bindPopup(
+                                '<b>'+feature.properties.NOMBRE_TOP+
+                                '</b><br>no data; Enirio-Aralar is an uninhabited territory in the Aralar range under the jurisdiction of 15 municipalities, used for environmental protection and grazing, among others' +
+                                '<sup><a href = "https://www.enirioaralar.eus/mankomunitatea/">1</a></sup>'
+                            )
+                        }
+                    } else {
+                        layer.bindPopup(
+                        '<b>'+feature.properties.NOMBRE_TOP+'</b>, '+feature.properties.TERRITORIO+
+                        '<br><b>'+feature.properties[`euskaldunes_${year}`]+'</b> ('+feature.properties[`pct_${year}`]+'% of population)'
+                        );
+                    }
+                }
+            }).addTo(map);
+        }         
+
+        var layers = {};
+        var years = ["1986", "1991", "1996", "2001", "2006", "2011", "2016", "2021"];
+        years.forEach(function (year) {
+            layers[year] = year_layer(year);
+        });
+
+        layers["1986"].addTo(map);
+
+        var slider = L.control.timelineSlider({
+            position: 'bottomleft',
+            timelineItems: ["1986", "1991", "1996", "2001", "2006", "2011", "2016", "2021"],
+            changeMap: function ({ label }){
+                Object.values(layers).forEach(function (layer) {
+                    map.removeLayer(layer);
+                });
+                layers[label].addTo(map);
+                eh_territorios.bringToFront();
+                activeLayer = `eh_municipios_${label}`;
+            },
+            activeColor: "#006d2c",
+            backgroundOpacity: 0.8,
+            topBgPadding: "15px",
+            bottomBgPadding: "5px",
+            labelFontSize: "12px",
+            labelWidth: "50px"
+        });
+
+        slider.addTo(map);
+
+        var eh_territorios = L.geoJSON(territorios, {
+            style: {
+                color: "#000000",
+                weight: 1.5,
+                fillOpacity: 0
+            },
+            interactive: false
+        }).addTo(map);
+        
+        const infoButton = L.control({position: 'topleft'});
+
+        infoButton.onAdd = () => {
+            const buttonDiv = L.DomUtil.create('div');
+
+            buttonDiv.innerHTML = `<button type="button" id="infoBtn" title="Map info"><span class="fa fa-solid fa-info"></span></button>`;
+            return buttonDiv;
+        };
+        infoButton.addTo(map);
+
+        const openPopup = document.getElementById('infoBtn');
+        const closePopup = document.getElementById('closePopup');
+        const infoPopup = document.getElementById('infoPopup');
+
+        openPopup.addEventListener('click', () => {
+            infoPopup.style.display = 'flex';
+        });
+
+        closePopup.addEventListener('click', () => {
+            infoPopup.style.display = 'none';
+        });
+
+        window.addEventListener('click', (event) => {
+            if (event.target === infoPopup) {
+                infoPopup.style.display = 'none';
+            }
+        });
+
+        let searchLayer;
+        const year = activeLayer.split('_')[2];
+        searchLayer = layers[year]
+
+        var search = L.control.search({
+            layer: searchLayer,
+            initial: false,
+            propertyName: "NOMBRE_TOP",
+            marker: false,
+            zoom: 12,
+            textPlaceholder: "Search...",
+            textCancel: "Clear",
+            textErr: "Not found",
+            tooltipLimit: 5,
+            autoCollapse: true
+        });
+
+        search.addTo(map);
+
+        const githubButton = L.control({position: 'topleft'});
+        githubButton.onAdd = () => {
+            const buttonDiv = L.DomUtil.create('div');
+
+            buttonDiv.innerHTML = `<a href = "https://github.com/adamolejniczak/euskaldunes"><button type="button" id="ghBtn" title="Github Repo"><span class="fa fa-brands fa-github"></span></button></a>`;
+            buttonDiv.addEventListener('click', () => console.log('click'))
+            return buttonDiv;
+        };
+        githubButton.addTo(map);
+
+        
+        var info = L.control();
+
+        info.onAdd = function (map) {
+            this.info_div = L.DomUtil.create('div', 'info');
+            this.update();
+            return this.info_div;
+        };
+
+        info.update = function (props) {
+            var content = '';
+            const year = activeLayer.split('_')[2];
+
+            if (activeLayer.startsWith("eh_municipios")) {
+                if (props) {
+                    if (props[`pct_${year}`] === -999) {
+                        if (props.NOMBRE_TOP === 'Limitadua / El Limitado'){
+                            content += '<b>'+props.NOMBRE_TOP+'</b><br>'+
+                            'no data; territorial dispute between Aramaio (Araba/Álava) and Otxandio (Bizkaia)'+
+                            '<sup><a href = "https://www.elcorreo.com/alava/araba/201612/20/limitado-frontera-disputa-entre-20161219201924.html?">1</a></sup>'
+                        } else if (props.NOMBRE_TOP.includes('Parzonería')){
+                            content += '<b>'+props.NOMBRE_TOP+
+                            '</b><br>no data; <i>parzonería</i> is an uninahbited common land managed by surrounding municipalities'                       
+                        } else if (props.NOMBRE_TOP === 'Usansolo'){
+                            content += '<b>'+props.NOMBRE_TOP+
+                            '</b><br>no data; Usansolo municipality seceded from Galdakao on December 28th 2023'+
+                            '<sup><a href = "https://www.eitb.eus/es/noticias/politica/detalle/9386468/usansolo-se-convierte-hoy-oficialmente-en-localidad-numero-113-de-bizkaia/">1</a></sup>'
+                        } else if (props.NOMBRE_TOP === 'Ziortza-Bolibar'){
+                            content += '<b>'+props.NOMBRE_TOP+
+                            '</b><br>no data; Ziortza-Bolibar municipality became independent from Markina-Xemein on January 1st 2005'+
+                            '<sup><a href = "https://www.diariovasco.com/20070820/gente/ziortza-bolivar-alcaldes-libertadores-20070820.html">1</a></sup>'
+                        } else {
+                            content += '<b>'+props.NOMBRE_TOP+
+                            '</b><br>no data; Enirio-Aralar is an uninhabited territory in the Aralar range under the jurisdiction of 15 municipalities, used for environmental protection and grazing, among others' +
+                            '<sup><a href = "https://www.enirioaralar.eus/mankomunitatea/">1</a></sup>'
+                        }
+                    } else if (props[`pct_${year}`] >= 0){
+                        content += '<b>'+props.NOMBRE_TOP+', '+props.TERRITORIO+
+                        '<br>'+props[`euskaldunes_${year}`]+'</b> ('+props[`pct_${year}`]+'% of population)'
+                    }
+                } else {
+                    content += `<b><center>Euskaldunes</center></b>`
+                }
+            }
+            this.info_div.innerHTML = content
+        }
+
+        info.addTo(map);
+
+        var legend = L.control({position: 'bottomright'});
+
+        legend.onAdd = function (map) {
+            this.legend_div = L.DomUtil.create('div', 'info legend');
+            this.update();
+            return this.legend_div;
+        };
+
+        legend.update = function () {
+            if (activeLayer.startsWith("eh_municipios")) {
+                this.legend_div.innerHTML = 
+                '<b>Euskaldunes [% of population]</b><hr><br>' +
+                '<div><i style="background:#edf8fb"></i> 0–20</div><br>' +
+                '<div><i style="background:#ccece6"></i> 20–30</div><br>' +
+                '<div><i style="background:#99d8c9"></i> 30–45</div><br>' +
+                '<div><i style="background:#66c2a4"></i> 45-65</div><br>' +
+                '<div><i style="background:#2ca25f"></i> 65-80</div><br>' +
+                '<div><i style="background:#006d2c"></i> > 80</div><br>' 
+                ;
+            }
+        };
+
+        legend.addTo(map);
+
+        if (L.Browser.mobile) {
+            map.removeControl(map.zoomControl);
+        };
+
+        if(window.innerWidth <= 768) {
+            map.options.minZoom = 8;
+            map.setView([43.0429987, -2.6167045], 8);
+            scale.options.maxWidth = 75;
+
+            map.removeControl(slider);
+            map.removeControl(info);
+
+            L.control.timelineSlider({
+                position: 'bottomleft',
+                timelineItems: ["1986", "1991", "1996", "2001", "2006", "2011", "2016", "2021"],
+                changeMap: function ({ label }){
+                    Object.values(layers).forEach(function (layer) {
+                        map.removeLayer(layer);
+                    });
+                    layers[label].addTo(map);
+                    eh_territorios.bringToFront();
+                    activeLayer = `eh_municipios_${label}`;
+                },
+                activeColor: "#006d2c",
+                backgroundOpacity: 0.8,
+                topBgPadding: "15px",
+                bottomBgPadding: "5px",
+                labelFontSize: "12px",
+                labelWidth: "40px",
+                leftBgPadding: "15px",
+                rightBgPadding: "15px",
+                thumbHeight: "4.5px"
+            }).addTo(map);
+
+            legend.options.position = 'topright';
+            map.removeControl(legend);
+
+            const legendToggler = L.control({position: 'topright'});
+
+            legendToggler.onAdd = () => {
+                const buttonDiv = L.DomUtil.create('div');
+                buttonDiv.innerHTML = `<button id="legendToggle"><b>Legend</b></button>`;
+                return buttonDiv;
+            };
+            legendToggler.addTo(map);
+
+            const toggleLegend = document.getElementById('legendToggle');
+            let legendVisible = false;
+            toggleLegend.addEventListener('click', () => {
+                if (legendVisible) {
+                    map.removeControl(legend);
+                } else {
+                    legend.addTo(map);
+                }
+                legendVisible = !legendVisible;
+            });
+        }
+    </script>
+</body>
+</html>
