@@ -2,6 +2,8 @@
 
 > Basque language usage map
 
+![Demo](https://github.com/adamolejniczak/euskaldunes/blob/main/demo.gif)
+
 ### Check it out [here](https://adamolejniczak.github.io/euskaldunes/)!
 
 ## What is this?
